@@ -72,8 +72,8 @@ main() {
     if [[ "${_install}" =~ ^[yY] ]]; then
         echo "{\"name\":\"${_SCRIPT_NAME}\",\"content\":\"$(genScriptContent)\",\"type\":\"groovy\"}" > ${_TMP%/}/${_SCRIPT_NAME}.json || return $?
         # Delete if exists, and not showing error if not exists, but if install fails, it will show error and exit
-        curl -s -u "${_ADMIN_USER}:${_ADMIN_PWD}" -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script/${_SCRIPT_NAME}" -X DELETE
-        curl -sSf -u "${_ADMIN_USER}:${_ADMIN_PWD}" -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script" -d@${_TMP%/}/${_SCRIPT_NAME}.json || return $?
+        curl -s -L -k -u "${_ADMIN_USER}:${_ADMIN_PWD}" -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script/${_SCRIPT_NAME}" -X DELETE
+        curl -sSf -L -k -u "${_ADMIN_USER}:${_ADMIN_PWD}" -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script" -d@${_TMP%/}/${_SCRIPT_NAME}.json || return $?
     fi
     if [ -z "${_blobIDs}" ]; then
         echo "No blobIDs (-b)" >&2
@@ -101,7 +101,7 @@ main() {
             cat << EOF > "${_TMP%/}/${_SCRIPT_NAME}_batch.sh"
 #!/usr/bin/env bash
 _blobIDs="\$(echo "\$@" | tr " " ",")"
-curl -sSf -u '${_ADMIN_USER}:${_ADMIN_PWD}' -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script/${_SCRIPT_NAME}/run" -d"{\"blobIDs\":\"\${_blobIDs%,}\",\"blobStore\":\"${_blobStore}\",\"isOrient\":${_IS_ORIENT:-"false"},\"dryRun\":${_DRY_RUN:-"false"},\"debug\":${_DEBUG:-"false"}}"
+curl -sSf -L -k -u '${_ADMIN_USER}:${_ADMIN_PWD}' -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script/${_SCRIPT_NAME}/run" -d"{\"blobIDs\":\"\${_blobIDs%,}\",\"blobStore\":\"${_blobStore}\",\"isOrient\":${_IS_ORIENT:-"false"},\"dryRun\":${_DRY_RUN:-"false"},\"debug\":${_DEBUG:-"false"}}"
 echo ""
 EOF
             if [ "${_DEBUG}" == "true" ]; then
@@ -115,7 +115,7 @@ EOF
             return $?
         fi
     fi
-    curl -sSf -u "${_ADMIN_USER}:${_ADMIN_PWD}" -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script/${_SCRIPT_NAME}/run" -d'{"blobIDs":"'${_blobIDs%,}'","blobStore":"'${_blobStore}'","isOrient":'${_IS_ORIENT:-"false"}',"dryRun":'${_DRY_RUN:-"false"}',"debug":'${_DEBUG:-"false"}'}'
+    curl -sSf -L -k -u "${_ADMIN_USER}:${_ADMIN_PWD}" -H 'Content-Type: application/json' "${_NEXUS_URL%/}/service/rest/v1/script/${_SCRIPT_NAME}/run" -d'{"blobIDs":"'${_blobIDs%,}'","blobStore":"'${_blobStore}'","isOrient":'${_IS_ORIENT:-"false"}',"dryRun":'${_DRY_RUN:-"false"}',"debug":'${_DEBUG:-"false"}'}'
 }
 
 
