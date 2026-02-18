@@ -8,6 +8,7 @@ PURPOSE:
 
 NOTE:
     As the name/path of RestoreBlobStrategy can be different by Nexus version, this script is not guaranteed to work for all Nexus versions. Please test it first.
+    Nexus may cache .properties file in memory, so that the safest way is running this script after restarting Nexus.
 
 REQUIREMENTS:
     'curl' for uploading the script and initiating the script
@@ -29,7 +30,7 @@ EXAMPLES:
 
 OPTIONS:
     -I  Installing the groovy script for undeleting (only once per Nexus)
-    -s  blob store name (if group blob store, use the group member name)
+    -s  blob store name. If group blob store, use the group *member* name
     -b  blob IDs (comma separated), or a file contains lines of blobIDs
 EOF
 }
@@ -89,6 +90,7 @@ main() {
             # As the order might matter, not using 'sort'... but running two sed for YYYY dir and vol-NN.
             sed -n -E 's/.*\/([0-9]{4}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}\/[0-9]{2}\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[xa-f0-9]{4}-[a-f0-9]{12}).*/\1/p' ${_blobIDs} > ${_TMP%/}/blobIDs_$$.tmp
             sed -n -E 's/.*\/content\/vol-[0-9]{2}\/chap-[0-9]{2}\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}).*/\1/p' ${_blobIDs} >> ${_TMP%/}/blobIDs_$$.tmp
+            sed -n -E 's/.*@([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[0-9@:-]*).*/\1/p' ${_blobIDs} >> ${_TMP%/}/blobIDs_$$.tmp
             if [ ! -s "${_TMP%/}/blobIDs_$$.tmp" ]; then
                 echo "No valid blobIDs found in file ${_blobIDs} (${_TMP%/}/blobIDs_$$.tmp)" >&2
                 echo "If ${_blobIDs} contains only blob IDs (no '.properties'), may want to use _USE_SED=\"false\"" >&2
