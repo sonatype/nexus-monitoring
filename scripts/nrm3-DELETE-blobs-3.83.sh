@@ -77,7 +77,7 @@ main() {
         # In case the line contains unnecessary strings, like file-list result
         if [ "${_USE_SED}" == "true" ] && type sed >/dev/null 2>&1; then
             # As the order might matter, not using 'sort'... but running two sed for YYYY dir and vol-NN.
-            sed -n -E 's/.*([^ ,"]+@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}[@0-9\-:T]*).*/\1/p' ${_blobRefs} > ${_TMP%/}/blobRefs_$$.tmp
+            sed -n -E 's/([^ ,"]+@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}[@0-9:T-]*).*/\1/p' ${_blobRefs} > ${_TMP%/}/blobRefs_$$.tmp
             if [ ! -s "${_TMP%/}/blobRefs_$$.tmp" ]; then
                 echo "No valid blobRefs found in file ${_blobRefs} (${_TMP%/}/blobRefs_$$.tmp)" >&2
                 echo "If ${_blobRefs} contains only blobRefs (no '.properties'), may want to use _USE_SED=\"false\"" >&2
