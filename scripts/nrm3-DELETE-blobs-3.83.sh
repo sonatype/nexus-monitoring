@@ -14,9 +14,9 @@ REQUIREMENTS:
 
 EXAMPLES:
     cd /some/workDir
-    curl --compressed -o nrm3-delete-blobs.sh -L https://raw.githubusercontent.com/sonatype/nexus-monitoring/main/scripts/nrm3-delete-blobs-3.83.sh
+    curl --compressed -o nrm3-DELETE-blobs.sh -L https://raw.githubusercontent.com/sonatype/nexus-monitoring/main/scripts/nrm3-DELETE-blobs-3.83.sh
     export _ADMIN_USER="admin" _ADMIN_PWD="******" _NEXUS_URL="http://localhost:8081/" #_NO_BS_CHK="true" _DRY_RUN="true" _USE_SED="false"
-    bash ./nrm3-undelete.sh -I  -s <blobStoreName> -b <blobRefs>
+    bash ./nrm3-DELETE-blobs.sh -I  -s <blobStoreName> -b <blobRefs>
 
 OPTIONS:
     -I  Installing the groovy script for deleting blobs (only once per Nexus)
@@ -39,7 +39,7 @@ _SCRIPT_NAME="deleteByBlobRefs"
 # Below is used in the POST json string
 : "${_BLOB_STORE:=""}"
 : "${_BLOB_REFS:=""}"    # comma separated blobRefs
-: "${_NO_BS_CHK:="false"}"
+: "${_NO_BS_CHK:="false"}"  # If false, blob store name in the blob_ref needs to match, which doesn't if group blob store
 : "${_DRY_RUN:="false"}"
 : "${_DEBUG:="false"}"
 
