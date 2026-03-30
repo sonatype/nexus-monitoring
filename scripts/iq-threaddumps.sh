@@ -279,13 +279,10 @@ main() {
         _STORE_FILE="${_INSTALL_DIR%/}/config.yml"  # TODO: for k8s, no DB connection in this file
     fi
 
-    if [ -n "${_LOG_FILE}" ]; then
-        local _misc_start=$(date +%s)
-        miscChecks "${_PID}" &> "${_outDir%/}/${_pfx}900.log"
-        echo "[$(date +'%Y-%m-%d %H:%M:%S')] miscChecks completed ($(( $(date +%s) - ${_misc_start} ))s)" >&2
-    else
-        miscChecks "${_PID}" &>"${_outDir%/}/${_pfx}900.log" &
+    if [ -z "${_LOG_FILE}" ]; then
+        miscChecks "${_PID}" &> "${_outDir%/}/${_pfx}900.log" &
         takeDumps "${_PID}" "${_COUNT}" "${_INTERVAL}" "${_STORE_FILE}" "${_INSTALL_DIR%/}" "${_outDir%/}" "${_pfx}"
+        wait
         return $?
     fi
 
