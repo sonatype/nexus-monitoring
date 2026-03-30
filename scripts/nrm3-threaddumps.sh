@@ -23,7 +23,7 @@ OPTIONS:
     -s  Path to nexus-store.properties file (default empty = no DB check)
     -f  File to monitor (-r is required)
     -r  Regex (used in 'grep -E') to monitor -f file
-    -t  Used in "tail -n {t}" to monitor log file. Default -1 (only new line)
+    -t  Used in "tail -n {t}" to monitor log file. Default -1 (only new lines)
     -p  PID
     -o  Output directory (default WORD_DIR/log/tasks)
 EOF
@@ -382,9 +382,11 @@ main() {
         return 1
     fi
 
-    if [ -z "${_LOG_FILE}" ]; then
-        miscChecks "${_PID}" &>"${_outDir%/}/${_pfx}900.log" &
+    local _misc_start=$(date +%s)
+    miscChecks "${_PID}" &> "${_outDir%/}/${_pfx}900.log"
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] miscChecks completed ($(( $(date +%s) - ${_misc_start} ))s)" >&2
 
+    if [ -z "${_LOG_FILE}" ]; then
         if [ -s "${_STORE_FILE}" ] || [ -n "${jdbcUrl}" ]; then
             genDbConnTest
             runDbQuery "select pg_blocking_pids(pid) as blocked_by, * from pg_stat_activity where state <> 'idle' and query not like '% pg_stat_activity %' order by query_start limit 50" "${_STORE_FILE}" &>"${_outDir%/}/${_pfx}101.log" &
