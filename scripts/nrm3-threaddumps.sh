@@ -23,6 +23,7 @@ OPTIONS:
     -s  Path to nexus-store.properties file (default empty = no DB check)
     -f  File to monitor (-r is required)
     -r  Regex (used in 'grep -E') to monitor -f file
+    -t  Used in "tail -n {t}" to monitor log file. Default -1 (only new line)
     -p  PID
     -o  Output directory (default WORD_DIR/log/tasks)
 EOF
@@ -33,6 +34,7 @@ EOF
 : "${_LIB_EXTRACT_DIR:=""}"
 _INTERVAL=2
 _COUNT=5
+_TAIL_N="-1"
 _STORE_FILE=""
 _LOG_FILE=""
 _REGEX=""
@@ -136,6 +138,10 @@ function runDbQuery() {
         echo "ERROR:No nexus-store.properties file and no jdbcUrl set." >&2
         return 1
     fi
+    if [ ! -d "${_installDir}" ]; then
+        echo "ERROR:No _installDir." >&2
+        return 1
+    fi
     local _groovy_jar="${_installDir%/}/system/org/codehaus/groovy/groovy-all/2.4.17/groovy-all-2.4.17.jar"
     # For "around" 3.68+
     if [ ! -s "${_groovy_jar}" ]; then
@@ -234,9 +240,9 @@ function tailStdout() {
         local jvmLog="${BASH_REMATCH[1]}"
         # Default is karaf.data (or PWD) + LogFile. Also, LogFile can be absolute path
         if [[ "${jvmLog}" =~ ^/ ]]; then
-            _cmd="tail -n -1 -f ${jvmLog}"
+            _cmd="tail -n ${_TAIL_N:-"-1"} -f ${jvmLog}"
         else
-            _cmd="tail -n -1 -f ${_installDir%/}/${jvmLog#/}"
+            _cmd="tail -n ${_TAIL_N:-"-1"} -f ${_installDir%/}/${jvmLog#/}"
         fi
     elif readlink -f /proc/${_pid}/fd/1 2>/dev/null | grep -q '/pipe:'; then
         #_cmd="cat /proc/${_pid}/fd/1"
@@ -266,28 +272,32 @@ function takeDumps() {
     local _outPfx="${_outDir%/}/${_pfx}"
 
     local _jstack=""
+    # Use JAVA_HOME one first
     if [ -x "${JAVA_HOME%/}/bin/jstack" ]; then
         _jstack="${JAVA_HOME%/}/bin/jstack"
+    elif [ -x "${JAVA_HOME%/}/bin/jcmd" ]; then
+        _jstack="${JAVA_HOME%/}/bin/jcmd"
     elif type jstack &>/dev/null; then
         _jstack="jstack"
     fi
     if [ -z "${_jstack}" ]; then
         if [ ! -f /proc/${_pid}/fd/1 ]; then
-            echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARN  No 'jstack' and no stdout file (so best effort)" >&2
+            echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARN  No 'jstack' and no stdout file (best effort)" >&2
         fi
         tailStdout "${_pid}" "$((${_count} * ${_interval} + 4))" "${_outPfx}000.log" "${_installDir}"
     fi
 
     for _i in $(seq 1 ${_count}); do
         echo "[$(date +'%Y-%m-%d %H:%M:%S')] taking dump ${_i}/${_count} into '${_outPfx}*' ..." >&2
-        local _wpid_in_for=""
-        if [ -s "${_storeProp}" ] || [ -n "${jdbcUrl}" ]; then
-            # If _storeProp is given, do extra check for NXRM3
-            (date +'%Y-%m-%d %H:%M:%S'; runDbQuery "select pg_blocking_pids(pid) as blocked_by, * from pg_stat_activity where state <> 'idle' and query not like '% pg_stat_activity %' order by query_start limit 50;" "${_storeProp}" "${_interval}") >> "${_outPfx}101.log" &
-            _wpid_in_for="$!"
-        fi
         if [ -n "${_jstack}" ]; then
-            ${_jstack} -l ${_pid} >> "${_outPfx}000.log"
+            if [ "${_jstack##*/}" = "jcmd" ]; then
+                ${_jstack} ${_pid} Thread.print -l >> "${_outPfx}000.log"
+                ${_jstack} ${_pid} GC.heap_info >> "${_outPfx}000.log"
+                #${_jstack} ${_pid} VM.native_memory summary >> "${_outPfx}000.log"
+                echo "" >> "${_outPfx}000.log"
+            else
+                ${_jstack} -l ${_pid} >> "${_outPfx}000.log"
+            fi
         else
             kill -3 "${_pid}"
         fi
@@ -295,7 +305,6 @@ function takeDumps() {
         (date +"%Y-%m-%d %H:%M:%S"; netstat -topen 2>/dev/null || cat /proc/net/tcp* 2>/dev/null) >> "${_outPfx}002.log"
         (date +"%Y-%m-%d %H:%M:%S"; netstat -s 2>/dev/null || cat /proc/net/dev 2>/dev/null) >> "${_outPfx}003.log"
         [ ${_i} -lt ${_count} ] && sleep ${_interval}
-        [ -n "${_wpid_in_for}" ] && wait ${_wpid_in_for}
     done
     if [ -s /tmp/.tailStdout.run ]; then
         local _wpid="$(cat /tmp/.tailStdout.run)"
@@ -373,14 +382,16 @@ main() {
         return 1
     fi
 
-    genDbConnTest
-    local _misc_start=$(date +%s)
-    miscChecks "${_PID}" &>"${_outDir%/}/${_pfx}900.log"
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] miscChecks completed ($(($(date +%s) - ${_misc_start}))s)" >&2
-    # NOTE: same infor as prometheus is in support zip
-
     if [ -z "${_LOG_FILE}" ]; then
+        miscChecks "${_PID}" &>"${_outDir%/}/${_pfx}900.log" &
+
+        if [ -s "${_STORE_FILE}" ] || [ -n "${jdbcUrl}" ]; then
+            genDbConnTest
+            runDbQuery "select pg_blocking_pids(pid) as blocked_by, * from pg_stat_activity where state <> 'idle' and query not like '% pg_stat_activity %' order by query_start limit 50" "${_STORE_FILE}" &>"${_outDir%/}/${_pfx}101.log" &
+        fi
+
         takeDumps "${_PID}" "${_COUNT}" "${_INTERVAL}" "${_STORE_FILE}" "${_INSTALL_DIR%/}" "${_outDir%/}" "${_pfx}"
+        wait
         return $?
     fi
 
@@ -388,7 +399,7 @@ main() {
     [ -z "${_REGEX}" ] && echo "'-f' is provided but no '-r'" >&2 && return 1
     echo "Monitoring ${_LOG_FILE} with '${_REGEX}' ..." >&2
     while true; do
-        if tail -n -1 -F "${_LOG_FILE}" | grep --line-buffered -m1 -E "${_REGEX}"; then
+        if tail -n ${_TAIL_N:-"-1"} -F "${_LOG_FILE}" | grep --line-buffered -m1 -E "${_REGEX}"; then
             trap "_stopping" SIGINT
             takeDumps "${_PID}" "${_COUNT}" "${_INTERVAL}" "${_PROP_FILE}" "${_INSTALL_DIR%/}" "${_outDir%/}"
             sleep 1
@@ -403,13 +414,16 @@ if [ "$0" = "${BASH_SOURCE[0]}" ]; then
         exit 0
     fi
 
-    while getopts "c:i:s:p:f:r:o:" opts; do
+    while getopts "c:i:t:s:p:f:r:o:" opts; do
         case $opts in
         c)
             [ -n "$OPTARG" ] && _COUNT="$OPTARG"
             ;;
         i)
             [ -n "$OPTARG" ] && _INTERVAL="$OPTARG"
+            ;;
+        t)
+            [ -n "$OPTARG" ] && _TAIL_N="$OPTARG"
             ;;
         s)
             _STORE_FILE="$OPTARG"
